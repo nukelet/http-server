@@ -1,0 +1,7 @@
+nonexistent_resource.html
+resource_without_read_perms.html
+resource_with_read_perms.html
+directory_without_execute_perms/
+directory_without_index_or_welcome/
+directory_with_index_and_welcome_without_read_perms/
+directory_with_readable_index/
