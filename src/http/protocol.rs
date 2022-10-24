@@ -5,16 +5,18 @@ use std::io::{
     ErrorKind as IoErrorKind
 };
 use std::path::Path;
+use std::os::unix::fs::MetadataExt;
 
 use chrono::offset::Utc;
 
 /*
  * TODO:
  * - Clean up the ugly String hacks (use lifetimes and
- *   &str instead)
+ *   slices instead)
+ * - Set up lifetimes instead of creating copies
  */
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Method {
     Get,
     Head,
@@ -22,7 +24,7 @@ pub enum Method {
     Options,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Request {
     pub method: Method,
     pub resource: String,
@@ -68,7 +70,27 @@ pub struct Response {
     pub message: Vec<u8>,
 }
 
-pub struct Server {
+// struct RequestHandler {
+//     request: Request,
+//
+//     resource_path: String,
+//     resource: Option<File>,
+//     status: StatusCode,
+// }
+//
+// impl RequestHandler {
+//     pub fn new(req: &Request) -> RequestHandler {
+//         let request_handler = RequestHandler {
+//             request: req.clone(),
+//             resource_path: req.resource.clone(),
+//             resource: None,
+//             status:  StatusCode::Ok,
+//         };
+//
+//     }
+// }
+
+pub struct RequestHandler {
     pub version: String,
     pub description: String,
     pub root_dir: String,
@@ -76,7 +98,7 @@ pub struct Server {
     pub response_status: StatusCode,
 }
 
-impl Server {
+impl RequestHandler {
     pub fn process_request(&mut self, req: &Request) {
         match req.method {
             Method::Get => {
@@ -85,8 +107,12 @@ impl Server {
                 match code {
                     StatusCode::Ok => {
                         let mut data = String::new();
-                        res.unwrap().read_to_string(&mut data);
-                        println!("resource: {}", data);
+                        // if let Some(mut resource) = res {
+                        //     resource.read_to_string(&mut data);
+                        // }
+                        // println!("resource: {}", data);
+                        //
+                        // self.assemble_header(req, res);
                     }
                     _ => println!("error code: {}", code as u16),
                 }
@@ -97,10 +123,9 @@ impl Server {
             _ => {},
         };
 
-        self.assemble_header(req);
     }
 
-    fn assemble_header(&self, req: &Request) -> () {
+    fn assemble_header(&self, request: &Request, resource: Option<File>) -> HashMap<String, String> {
         let mut headers: HashMap<String, String> = HashMap::new();
 
         let timestamp = Utc::now()
@@ -116,6 +141,20 @@ impl Server {
                 headers.insert("Connection".to_string(), "close".to_string());
             }
         }
+
+        match request.method {
+            Method::Get | Method::Head => {
+                if let Some(res) = resource {
+                    let mtime = res.metadata().unwrap().mtime();
+                    println!("{}", mtime);
+                }
+            },
+            _ => {}
+        }
+
+        
+
+        headers
     }
 
     fn get_resource(&self, resource: &str) -> (StatusCode, Option<File>) {
