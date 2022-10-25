@@ -5,6 +5,7 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::time::SystemTime;
 
+use chrono::DateTime;
 use chrono::offset::Utc;
 
 /*
@@ -61,31 +62,9 @@ impl StatusCode {
 #[derive(Debug)]
 pub struct Response {
     pub status: StatusCode,
-    pub version: String,
-    pub reason: String,
     pub headers: HashMap<String, String>,
-    pub message: Vec<u8>,
+    pub message: String,
 }
-
-// struct RequestHandler {
-//     request: Request,
-//
-//     resource_path: String,
-//     resource: Option<File>,
-//     status: StatusCode,
-// }
-//
-// impl RequestHandler {
-//     pub fn new(req: &Request) -> RequestHandler {
-//         let request_handler = RequestHandler {
-//             request: req.clone(),
-//             resource_path: req.resource.clone(),
-//             resource: None,
-//             status:  StatusCode::Ok,
-//         };
-//
-//     }
-// }
 
 pub struct RequestHandler {
     pub version: String,
@@ -98,60 +77,56 @@ pub struct RequestHandler {
 struct Resource {
     data: String,
     size: u64,
-    modified: SystemTime,
-    content_type: String,
+    last_modified: SystemTime,
 }
 
 impl RequestHandler {
-    pub fn process_request(&mut self, req: &Request) {
-        match req.method {
-            Method::Get => {
-                let (code, res) = self.get_resource(&req.resource);
-                self.response_status = code;
-                match code {
-                    StatusCode::Ok => {
-                        self.assemble_header(req, res);
-
-                        let mut data = String::new();
-                        if let Some(resource) = res {
-                            resource.read_to_string(&mut data);
-                        }
-                        println!("resource: {}", data);
-                    }
-                    _ => println!("error code: {}", code as u16),
+    pub fn process_request(&mut self, request: &Request) -> Response {
+        // prepare the headers
+        let mut headers = self.assemble_initial_headers(request);
+        let mut message = String::from("");
+        match request.method {
+            Method::Get | Method::Head => {
+                if let Ok((code, res)) = self.get_resource(&request.resource) {
+                    self.response_status = code;
+                    let date: DateTime<Utc> = res.last_modified.into();
+                    // println!("{}", date.format("%a %d %b %Y %H:%M:%S GMT"));
+                    headers.insert("Last-Modified".to_string(),
+                        date.format("%a %d %b %Y %H:%M:%S GMT").to_string());
+                    headers.insert("Content-Length".to_string(), format!("{}", res.size));
+                    headers.insert("Content-Type".to_string(), "text/html".to_string());
                 }
-            }
-            Method::Head => {
-                let (code, res) = self.get_resource(&req.resource);
+            },
+            Method::Options => {
+                headers.insert("Allow".to_string(), 
+                               "OPTIONS, GET, HEAD, TRACE".to_string());
             }
             _ => {}
         };
+        
+        Response {
+            status: self.response_status,
+            headers,
+            message: String::from(""),
+        }
+
     }
 
-    fn assemble_header(&self, request: &Request, resource: &Resource) -> HashMap<String, String> {
+    fn assemble_initial_headers(&self, request: &Request) -> HashMap<String, String> {
         let mut headers: HashMap<String, String> = HashMap::new();
 
-        let timestamp = Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
+        headers.insert("Server".to_string(), self.version.clone());
+        let timestamp = Utc::now().format("%a %d %b %Y %H:%M:%S GMT").to_string();
         println!("{}", timestamp);
         headers.insert("Date".to_string(), timestamp);
 
-        match headers.get("Connection") {
+        match request.headers.get("Connection") {
             Some(c) => {
                 headers.insert("Connection".to_string(), c.to_owned());
             }
             None => {
                 headers.insert("Connection".to_string(), "close".to_string());
             }
-        }
-
-        match request.method {
-            Method::Get | Method::Head => {
-                if let Some(res) = resource {
-                    let mtime = res.metadata().unwrap().mtime();
-                    println!("{}", mtime);
-                }
-            }
-            _ => {}
         }
 
         headers
@@ -161,16 +136,15 @@ impl RequestHandler {
         let path = Path::new(&self.root_dir).join(resource);
         println!("fetching resource at {}", path.display());
         match File::open(path) {
-            Ok(file) => {
+            Ok(mut file) => {
                 // TODO: these can return errors depending on the platform,
                 // but will run fine on Unix... maybe handle things more
                 // gracefully instead of unwrapping everything?
                 let metadata = file.metadata().unwrap();
                 let size = metadata.len();
-                let modified = metadata.modified().unwrap();
+                let last_modified = metadata.modified().unwrap();
                 // TODO: implement content_type detection properly
-                let content_type = String::from("text/html");
-                let data = String::new();
+                let mut data = String::new();
                 // TODO: check if it's a directory
                 file.read_to_string(&mut data);
                 Ok((
@@ -178,8 +152,7 @@ impl RequestHandler {
                     Resource {
                         data,
                         size,
-                        modified,
-                        content_type,
+                        last_modified,
                     },
                 ))
             }

@@ -49,7 +49,11 @@ fn main() -> std::io::Result<()> {
         headers: HashMap::new(),
     };
 
-    server.process_request(&request);
+    let response = server.process_request(&request);
+    
+    for (name, field) in response.headers {
+        println!("{}: {}", name, field);
+    }
 
     Ok(())
 }
