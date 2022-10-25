@@ -1,26 +1,24 @@
 mod http;
 use http::parser::*;
-use http::protocol::{RequestHandler, Request, Method, StatusCode};
+use http::protocol::{Method, Request, RequestHandler, StatusCode};
 use std::collections::HashMap;
 use std::str;
 
-use std::net::{TcpStream, TcpListener};
 use std::io::{prelude, Read};
+use std::net::{TcpListener, TcpStream};
 
 fn echo(mut stream: TcpStream) {
     let mut buf = String::new();
     stream.read_to_string(&mut buf).unwrap();
-    println!{"{}\n", buf};
+    println! {"{}\n", buf};
 }
 
 fn main() -> std::io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:8000").unwrap(); 
-    let mut buf = [0; 1024];
-    for mut stream in listener.incoming() {
-        echo(stream?);
-    }
-
-    Ok(())
+    // let listener = TcpListener::bind("127.0.0.1:8000").unwrap();
+    // let mut buf = [0; 1024];
+    // for mut stream in listener.incoming() {
+    //     echo(stream?);
+    // }
 
     // let paths = std::fs::read_dir("tests").unwrap();
     // for path in paths {
@@ -37,22 +35,21 @@ fn main() -> std::io::Result<()> {
     //     }
     // }
 
+    let mut server = RequestHandler {
+        version: "HTTP/1.1".to_string(),
+        description: "HTTP Server v0.1".to_string(),
+        root_dir: "tests/root_dir/".to_string(),
+        response_status: StatusCode::Ok,
+    };
 
-    // let mut server = RequestHandler{
-    //     version: "HTTP/1.1".to_string(),
-    //     description: "HTTP Server v0.1".to_string(),
-    //     root_dir: "tests/root_dir/".to_string(),
-    //     response_status: StatusCode::Ok,
-    // };
-    //
-    // let request = Request {
-    //     method: Method::Get,
-    //     resource: "resource_without_read_perms.html".to_string(),
-    //     version: "HTTP/1.1".to_string(),
-    //     headers: HashMap::new(),
-    // };
-    //
-    // server.process_request(&request);
-    
+    let request = Request {
+        method: Method::Get,
+        resource: "index.html".to_string(),
+        version: "HTTP/1.1".to_string(),
+        headers: HashMap::new(),
+    };
 
+    server.process_request(&request);
+
+    Ok(())
 }

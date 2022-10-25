@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{
-    Read,
-    ErrorKind as IoErrorKind
-};
-use std::path::Path;
+use std::io::{ErrorKind as IoErrorKind, Read};
 use std::os::unix::fs::MetadataExt;
+use std::path::Path;
+use std::time::SystemTime;
 
 use chrono::offset::Utc;
 
@@ -29,7 +27,7 @@ pub struct Request {
     pub method: Method,
     pub resource: String,
     pub version: String,
-    pub headers: HashMap<String, String>
+    pub headers: HashMap<String, String>,
 }
 
 #[repr(u16)]
@@ -58,7 +56,6 @@ impl StatusCode {
             _ => StatusCode::NotImplemented,
         }
     }
-
 }
 
 #[derive(Debug)]
@@ -98,6 +95,13 @@ pub struct RequestHandler {
     pub response_status: StatusCode,
 }
 
+struct Resource {
+    data: String,
+    size: u64,
+    modified: SystemTime,
+    content_type: String,
+}
+
 impl RequestHandler {
     pub fn process_request(&mut self, req: &Request) {
         match req.method {
@@ -106,37 +110,35 @@ impl RequestHandler {
                 self.response_status = code;
                 match code {
                     StatusCode::Ok => {
+                        self.assemble_header(req, res);
+
                         let mut data = String::new();
-                        // if let Some(mut resource) = res {
-                        //     resource.read_to_string(&mut data);
-                        // }
-                        // println!("resource: {}", data);
-                        //
-                        // self.assemble_header(req, res);
+                        if let Some(resource) = res {
+                            resource.read_to_string(&mut data);
+                        }
+                        println!("resource: {}", data);
                     }
                     _ => println!("error code: {}", code as u16),
                 }
-            },
+            }
             Method::Head => {
                 let (code, res) = self.get_resource(&req.resource);
-            },
-            _ => {},
+            }
+            _ => {}
         };
-
     }
 
-    fn assemble_header(&self, request: &Request, resource: Option<File>) -> HashMap<String, String> {
+    fn assemble_header(&self, request: &Request, resource: &Resource) -> HashMap<String, String> {
         let mut headers: HashMap<String, String> = HashMap::new();
 
-        let timestamp = Utc::now()
-            .format("%a, %d %b %Y %H:%M:%S GMT").to_string();
-        println!("{}", timestamp); 
+        let timestamp = Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
+        println!("{}", timestamp);
         headers.insert("Date".to_string(), timestamp);
 
         match headers.get("Connection") {
             Some(c) => {
                 headers.insert("Connection".to_string(), c.to_owned());
-            },
+            }
             None => {
                 headers.insert("Connection".to_string(), "close".to_string());
             }
@@ -148,27 +150,42 @@ impl RequestHandler {
                     let mtime = res.metadata().unwrap().mtime();
                     println!("{}", mtime);
                 }
-            },
+            }
             _ => {}
         }
-
-        
 
         headers
     }
 
-    fn get_resource(&self, resource: &str) -> (StatusCode, Option<File>) {
+    fn get_resource(&self, resource: &str) -> Result<(StatusCode, Resource), StatusCode> {
         let path = Path::new(&self.root_dir).join(resource);
         println!("fetching resource at {}", path.display());
         match File::open(path) {
             Ok(file) => {
-                (StatusCode::Ok, Some(file))
-            },
+                // TODO: these can return errors depending on the platform,
+                // but will run fine on Unix... maybe handle things more
+                // gracefully instead of unwrapping everything?
+                let metadata = file.metadata().unwrap();
+                let size = metadata.len();
+                let modified = metadata.modified().unwrap();
+                // TODO: implement content_type detection properly
+                let content_type = String::from("text/html");
+                let data = String::new();
+                // TODO: check if it's a directory
+                file.read_to_string(&mut data);
+                Ok((
+                    StatusCode::Ok,
+                    Resource {
+                        data,
+                        size,
+                        modified,
+                        content_type,
+                    },
+                ))
+            }
             Err(e) => match e.kind() {
-                IoErrorKind::NotFound => {
-                    (StatusCode::NotFound, None)
-                }
-                _ => (StatusCode::Forbidden, None)
+                IoErrorKind::NotFound => Err(StatusCode::NotFound),
+                _ => Err(StatusCode::Forbidden),
             },
         }
     }
