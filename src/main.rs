@@ -20,40 +20,46 @@ fn main() -> std::io::Result<()> {
     //     echo(stream?);
     // }
 
-    // let paths = std::fs::read_dir("tests").unwrap();
-    // for path in paths {
-    //     let path = path.unwrap();
-    //     println!("*** {} ***\n", path.path().display());
-    //
-    //     let buf = std::fs::read(path.path()).unwrap();
-    //     let req = str::from_utf8(&buf).unwrap();
-    //     match parse_request(req) {
-    //         Ok((_, request)) => println!("{:?}", request),
-    //         Err(e) => {
-    //             println!("{:?}", e);
-    //         },
-    //     }
-    // }
-
     let mut server = RequestHandler {
         version: "HTTP/1.1".to_string(),
         description: "HTTP Server v0.1".to_string(),
-        root_dir: "tests/root_dir/".to_string(),
+        root_dir: "/home/nuke/http-server/tests/root_dir/".to_string(),
         response_status: StatusCode::Ok,
     };
 
-    let request = Request {
-        method: Method::Get,
-        resource: "index.html".to_string(),
-        version: "HTTP/1.1".to_string(),
-        headers: HashMap::new(),
-    };
+    let paths = std::fs::read_dir("tests").unwrap();
+    for path in paths {
+        let path = path.unwrap();
+        if path.path().is_dir() {
+            continue;
+        }
+        println!("*** {} ***\n", path.path().display());
 
-    let response = server.process_request(&request);
-    
-    for (name, field) in response.headers {
-        println!("{}: {}", name, field);
+        let buf = std::fs::read(path.path()).unwrap();
+        let req = str::from_utf8(&buf).unwrap();
+        match parse_request(req) {
+            Ok((_, request)) => {
+                println!("{:?}", request);
+                let response = server.process_request(&request);
+                println!("{:?}", response);
+            }
+
+            Err(e) => {
+                println!("{:?}", e);
+            }
+        }
     }
+
+    // let request = Request {
+    //     method: Method::Get,
+    //     resource: "index.html".to_string(),
+    //     version: "HTTP/1.1".to_string(),
+    //     headers: HashMap::new(),
+    // };
+
+    // for (name, field) in response.headers {
+    //     println!("{}: {}", name, field);
+    // }
 
     Ok(())
 }

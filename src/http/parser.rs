@@ -1,12 +1,8 @@
 use nom::{
-    IResult,
-    bytes::complete::{
-        tag,
-        take_while1, take_until1, take_until,
-        is_not,
-    },
     branch::alt,
+    bytes::complete::{is_not, tag, take_until, take_until1, take_while1},
     sequence::{preceded, tuple},
+    IResult,
 };
 
 // use std::str;
@@ -22,13 +18,8 @@ fn line_ending(i: &str) -> IResult<&str, &str> {
 }
 
 pub fn method(i: &str) -> IResult<&str, &str> {
-    alt((
-        tag("GET"),
-        tag("HEAD"),
-        tag("TRACE"),
-        tag("OPTIONS"),
-        ))(i)
-    
+    alt((tag("GET"), tag("HEAD"), tag("TRACE"), tag("OPTIONS")))(i)
+
     // println!("parsing: {}", i);
     // match is_not(" ")(i) {
     //     "GET" => Ok((i, Method::Get)),
@@ -66,9 +57,14 @@ fn header_field(i: &str) -> IResult<&str, &str> {
 
 pub fn parse_request(input: &str) -> IResult<&str, Request> {
     // parse request line
-    let (mut pos, (method, _, resource, _, version, _)) = 
-        tuple((method, whitespace, resource,
-              whitespace, http_version, line_ending))(input)?;
+    let (mut pos, (method, _, resource, _, version, _)) = tuple((
+        method,
+        whitespace,
+        resource,
+        whitespace,
+        http_version,
+        line_ending,
+    ))(input)?;
 
     // TODO: make the resource parser return an HttpMethod
     let request_method = match method {
@@ -78,22 +74,21 @@ pub fn parse_request(input: &str) -> IResult<&str, Request> {
         "TRACE" => Method::Trace,
         _ => Method::Get,
     };
-    
+
     let mut request = Request {
-            method: request_method,
-            resource: resource.to_string(),
-            version: version.to_string(),
-            headers: HashMap::new(),
+        method: request_method,
+        resource: resource.to_string(),
+        version: version.to_string(),
+        headers: HashMap::new(),
+        raw_request: input.to_string(),
     };
 
     while !pos.is_empty() {
-        let (s, (name, _, field, _)) =
-            tuple((header_name, colon, header_field, line_ending))(pos)?;
+        let (s, (name, _, field, _)) = tuple((header_name, colon, header_field, line_ending))(pos)?;
 
-        request.headers
-            .insert(name.to_string(), field.to_string());
+        request.headers.insert(name.to_string(), field.to_string());
 
-        println!("inserting ({}, {})", name, field);
+        // println!("inserting ({}, {})", name, field);
 
         pos = s;
     }

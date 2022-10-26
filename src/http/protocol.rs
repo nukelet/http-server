@@ -5,8 +5,8 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::time::SystemTime;
 
-use chrono::DateTime;
 use chrono::offset::Utc;
+use chrono::DateTime;
 
 /*
  * TODO:
@@ -29,6 +29,7 @@ pub struct Request {
     pub resource: String,
     pub version: String,
     pub headers: HashMap<String, String>,
+    pub raw_request: String,
 }
 
 #[repr(u16)]
@@ -44,7 +45,7 @@ pub enum StatusCode {
 }
 
 impl StatusCode {
-    // TODO: return this as Result<StatusCode, InvalidStatusCode>
+    // TODO: return this as Result<StatusCode, InvalidStatusCode>?
     pub fn from_u16(code: u16) -> StatusCode {
         match code {
             200 => StatusCode::Ok,
@@ -91,25 +92,51 @@ impl RequestHandler {
                     self.response_status = code;
                     let date: DateTime<Utc> = res.last_modified.into();
                     // println!("{}", date.format("%a %d %b %Y %H:%M:%S GMT"));
-                    headers.insert("Last-Modified".to_string(),
-                        date.format("%a %d %b %Y %H:%M:%S GMT").to_string());
+                    headers.insert(
+                        "Last-Modified".to_string(),
+                        date.format("%a %d %b %Y %H:%M:%S GMT").to_string(),
+                    );
                     headers.insert("Content-Length".to_string(), format!("{}", res.size));
                     headers.insert("Content-Type".to_string(), "text/html".to_string());
                 }
-            },
-            Method::Options => {
-                headers.insert("Allow".to_string(), 
-                               "OPTIONS, GET, HEAD, TRACE".to_string());
             }
-            _ => {}
+
+            Method::Options => {
+                headers.insert("Allow".to_string(), "OPTIONS, GET, HEAD, TRACE".to_string());
+            }
+
+            Method::Trace => {
+                headers.insert("Content-Type".to_string(), "message/html".to_string());
+            }
         };
-        
+
+        // assemble the message body (if applicable)
+        match request.method {
+            Method::Head | Method::Options => {}
+            Method::Get => {
+                // TODO: this really could be handled more elegantly (we're currently
+                // opening/reading the resource twice)
+                match self.get_resource(&request.resource) {
+                    Ok((code, resource)) => {
+                        message.push_str(resource.data.as_str());
+                        self.response_status = code;
+                    }
+                    Err(code) => {
+                        self.response_status = code;
+                    }
+                }
+            }
+
+            Method::Trace => {
+                message.push_str(request.raw_request.as_str());
+            }
+        }
+
         Response {
             status: self.response_status,
             headers,
-            message: String::from(""),
+            message,
         }
-
     }
 
     fn assemble_initial_headers(&self, request: &Request) -> HashMap<String, String> {
@@ -133,8 +160,29 @@ impl RequestHandler {
     }
 
     fn get_resource(&self, resource: &str) -> Result<(StatusCode, Resource), StatusCode> {
-        let path = Path::new(&self.root_dir).join(resource);
+        println!("{}", self.root_dir);
+        let mut path = Path::new(&self.root_dir).join(resource);
+        println!("{}", path.display());
+        if path.is_dir() {
+            println!(
+                "{} is a directory; looking for {} or {}...",
+                path.display(),
+                path.clone().join("index.html").as_path().display(),
+                path.clone().join("welcome.html").as_path().display()
+            );
+            if path.clone().join("index.html").exists() {
+                println!("found index.html");
+                path = path.join("index.html");
+            } else if path.clone().join("welcome.html").exists() {
+                println!("found welcome.html");
+                path = path.join("welcome.html");
+            } else {
+                return Err(StatusCode::NotFound);
+            }
+        }
+
         println!("fetching resource at {}", path.display());
+
         match File::open(path) {
             Ok(mut file) => {
                 // TODO: these can return errors depending on the platform,
