@@ -13,6 +13,7 @@ use chrono::DateTime;
  * - Clean up the ugly String hacks (use lifetimes and
  *   slices instead)
  * - Set up lifetimes instead of creating copies
+ * - Replace all the println! with an actual logging system
  */
 
 #[derive(Debug, Clone, Copy)]
@@ -21,6 +22,7 @@ pub enum Method {
     Head,
     Trace,
     Options,
+    NotImplemented,
 }
 
 #[derive(Debug, Clone)]
@@ -58,6 +60,18 @@ impl StatusCode {
             _ => StatusCode::NotImplemented,
         }
     }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            StatusCode::Ok => "200 OK",
+            StatusCode::BadRequest => "400 Bad Request",
+            StatusCode::Forbidden => "403 Forbidden",
+            StatusCode::NotFound => "404 Not Found",
+            StatusCode::MethodNotAllowed => "405 Method Not Allowed",
+            StatusCode::NotImplemented => "501 Not Implemented",
+            StatusCode::HttpVersionNotSupported => "505 HTTP Version Not Supported",
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -83,7 +97,7 @@ struct Resource {
 
 impl RequestHandler {
     pub fn process_request(&mut self, request: &Request) -> Response {
-        // prepare the headers
+        // prepare the headers and status codes
         let mut headers = self.assemble_initial_headers(request);
         let mut message = String::from("");
         match request.method {
@@ -103,16 +117,22 @@ impl RequestHandler {
 
             Method::Options => {
                 headers.insert("Allow".to_string(), "OPTIONS, GET, HEAD, TRACE".to_string());
+                self.response_status = StatusCode::Ok;
             }
 
             Method::Trace => {
                 headers.insert("Content-Type".to_string(), "message/html".to_string());
+                self.response_status = StatusCode::Ok;
+            }
+            
+            Method::NotImplemented => {
+                self.response_status = StatusCode::NotImplemented;
             }
         };
 
         // assemble the message body (if applicable)
         match request.method {
-            Method::Head | Method::Options => {}
+            Method::Head | Method::Options | Method::NotImplemented => {}
             Method::Get => {
                 // TODO: this really could be handled more elegantly (we're currently
                 // opening/reading the resource twice)
@@ -144,7 +164,7 @@ impl RequestHandler {
 
         headers.insert("Server".to_string(), self.version.clone());
         let timestamp = Utc::now().format("%a %d %b %Y %H:%M:%S GMT").to_string();
-        println!("{}", timestamp);
+        // println!("{}", timestamp);
         headers.insert("Date".to_string(), timestamp);
 
         match request.headers.get("Connection") {
@@ -159,29 +179,34 @@ impl RequestHandler {
         headers
     }
 
-    fn get_resource(&self, resource: &str) -> Result<(StatusCode, Resource), StatusCode> {
-        println!("{}", self.root_dir);
-        let mut path = Path::new(&self.root_dir).join(resource);
-        println!("{}", path.display());
+    fn get_resource(&self, path: &str) -> Result<(StatusCode, Resource), StatusCode> {
+        // we need to trim the leading '/' in order to use
+        // `path` as a relative path
+        let resource_path = match path.strip_prefix('/') {
+            Some(trimmed) => trimmed,
+            None => path,
+        };
+        let mut path = Path::new(&self.root_dir).join(resource_path);
+        // println!("dir: {}, exists: {}", path.display(), path.exists());
         if path.is_dir() {
-            println!(
-                "{} is a directory; looking for {} or {}...",
-                path.display(),
-                path.clone().join("index.html").as_path().display(),
-                path.clone().join("welcome.html").as_path().display()
-            );
-            if path.clone().join("index.html").exists() {
-                println!("found index.html");
+            // println!(
+            //     "{} is a directory; looking for {} or {}...",
+            //     path.display(),
+            //     path.clone().join("index.html").as_path().display(),
+            //     path.clone().join("welcome.html").as_path().display()
+            // );
+            if path.join("index.html").exists() {
+                // println!("found index.html");
                 path = path.join("index.html");
-            } else if path.clone().join("welcome.html").exists() {
-                println!("found welcome.html");
+            } else if path.join("welcome.html").exists() {
+                // println!("found welcome.html");
                 path = path.join("welcome.html");
             } else {
                 return Err(StatusCode::NotFound);
             }
         }
 
-        println!("fetching resource at {}", path.display());
+        // println!("fetching resource at {}", path.display());
 
         match File::open(path) {
             Ok(mut file) => {
@@ -193,7 +218,8 @@ impl RequestHandler {
                 let last_modified = metadata.modified().unwrap();
                 // TODO: implement content_type detection properly
                 let mut data = String::new();
-                // TODO: check if it's a directory
+                // TODO: should check for errors here (e.g. when transmitting
+                // non-text data)
                 file.read_to_string(&mut data);
                 Ok((
                     StatusCode::Ok,
@@ -208,6 +234,20 @@ impl RequestHandler {
                 IoErrorKind::NotFound => Err(StatusCode::NotFound),
                 _ => Err(StatusCode::Forbidden),
             },
+        }
+    }
+
+    pub fn bad_request(&self) -> Response {
+        let mut headers: HashMap<String, String> = HashMap::new();
+
+        headers.insert("Server".to_string(), self.version.clone());
+        let timestamp = Utc::now().format("%a %d %b %Y %H:%M:%S GMT").to_string();
+        headers.insert("Date".to_string(), timestamp);
+        headers.insert("Connection-Type".to_string(), "close".to_string());
+        Response {
+            status: StatusCode::BadRequest,
+            headers,
+            message: String::from(""),
         }
     }
 }

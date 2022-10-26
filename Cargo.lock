@@ -111,7 +111,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "final-project"
+name = "http-server"
 version = "0.1.0"
 dependencies = [
  "chrono",

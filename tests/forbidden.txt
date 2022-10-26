@@ -1,0 +1,5 @@
+GET /resource_without_read_perms.html HTTP/1.1
+Host: localhost:8000
+User-Agent: curl/7.85.0
+Accept: */*
+

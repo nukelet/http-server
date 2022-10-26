@@ -72,7 +72,7 @@ pub fn parse_request(input: &str) -> IResult<&str, Request> {
         "HEAD" => Method::Head,
         "OPTIONS" => Method::Options,
         "TRACE" => Method::Trace,
-        _ => Method::Get,
+        _ => Method::NotImplemented,
     };
 
     let mut request = Request {
@@ -84,11 +84,17 @@ pub fn parse_request(input: &str) -> IResult<&str, Request> {
     };
 
     while !pos.is_empty() {
-        let (s, (name, _, field, _)) = tuple((header_name, colon, header_field, line_ending))(pos)?;
-
+        let (s, (name, _, _, field, _)) =
+            tuple((header_name, colon, whitespace, header_field, line_ending))(pos)?;
         request.headers.insert(name.to_string(), field.to_string());
 
         // println!("inserting ({}, {})", name, field);
+        // println!("left: {}", s);
+
+        // the last line is just a \r\n
+        if s.eq("\r\n") {
+            break;
+        }
 
         pos = s;
     }

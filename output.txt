@@ -1,0 +1,5 @@
+GET /directory_with_index_and_welcome_without_read_perms HTTP/1.1
+Host: localhost:8000
+User-Agent: curl/7.85.0
+Accept: */*
+
