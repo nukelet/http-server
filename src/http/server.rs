@@ -4,12 +4,14 @@ use crate::http::protocol::{
     StatusCode,
 };
 use std::fs;
+use std::path::Path;
 use std::str;
 
 pub struct Server {
     request_handler: RequestHandler,
 }
 
+#[allow(dead_code)]
 impl Server {
     pub fn new(root_path: &str) -> Server {
         Server{
@@ -22,7 +24,7 @@ impl Server {
         }
     }
 
-    pub fn process_from_str(&mut self, input: &str) -> std::io::Result<String> {
+    pub fn process_request_str(&mut self, input: &str) -> std::io::Result<String> {
         let response = match parser::parse_request(input) {
             Ok((_, request)) => {
                 self.request_handler.process_request(&request)
@@ -48,16 +50,16 @@ impl Server {
         Ok(s)
     }
 
-    pub fn process_from_file(&mut self, path: &str) -> std::io::Result<String> {
+    pub fn process_request_file(&mut self, path: &Path) -> std::io::Result<String> {
         let file = fs::read(path)?;
         // TODO: we need to handle this (in case there are
         // non-utf8 characters in the file)
         let input = str::from_utf8(&file).unwrap();
-        self.process_from_str(input)
+        self.process_request_str(input)
     }
 
-    pub fn process_from_buf(&mut self, buf: &[u8]) -> std::io::Result<String> {
+    pub fn process_request_buf(&mut self, buf: &[u8]) -> std::io::Result<String> {
         // TODO: handle non-utf8 buffer
-        self.process_from_str(std::str::from_utf8(buf).unwrap())
+        self.process_request_str(std::str::from_utf8(buf).unwrap())
     }
 }

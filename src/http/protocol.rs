@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{ErrorKind as IoErrorKind, Read};
-use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -34,6 +33,7 @@ pub struct Request {
     pub raw_request: String,
 }
 
+#[allow(dead_code)]
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum StatusCode {
@@ -46,6 +46,7 @@ pub enum StatusCode {
     HttpVersionNotSupported = 505,
 }
 
+#[allow(dead_code)]
 impl StatusCode {
     // TODO: return this as Result<StatusCode, InvalidStatusCode>?
     pub fn from_u16(code: u16) -> StatusCode {
@@ -105,7 +106,6 @@ impl RequestHandler {
                 if let Ok((code, res)) = self.get_resource(&request.resource) {
                     self.response_status = code;
                     let date: DateTime<Utc> = res.last_modified.into();
-                    // println!("{}", date.format("%a %d %b %Y %H:%M:%S GMT"));
                     headers.insert(
                         "Last-Modified".to_string(),
                         date.format("%a %d %b %Y %H:%M:%S GMT").to_string(),
@@ -164,7 +164,6 @@ impl RequestHandler {
 
         headers.insert("Server".to_string(), self.version.clone());
         let timestamp = Utc::now().format("%a %d %b %Y %H:%M:%S GMT").to_string();
-        // println!("{}", timestamp);
         headers.insert("Date".to_string(), timestamp);
 
         match request.headers.get("Connection") {
@@ -220,7 +219,7 @@ impl RequestHandler {
                 let mut data = String::new();
                 // TODO: should check for errors here (e.g. when transmitting
                 // non-text data)
-                file.read_to_string(&mut data);
+                file.read_to_string(&mut data).unwrap();
                 Ok((
                     StatusCode::Ok,
                     Resource {
