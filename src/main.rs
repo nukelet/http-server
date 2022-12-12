@@ -32,7 +32,7 @@ fn main() -> std::io::Result<()> {
     //     listen(stream?, &mut server);
     // }
 
-    let root_dir = "tests/root_dir";
+    let root_dir = "webspace";
     let mut server = Server::new(root_dir);
 
     let tests_dir = "tests/requests";

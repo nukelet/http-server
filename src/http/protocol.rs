@@ -79,7 +79,7 @@ impl StatusCode {
 pub struct Response {
     pub status: StatusCode,
     pub headers: HashMap<String, String>,
-    pub message: String,
+    pub message: Vec<u8>,
 }
 
 pub struct RequestHandler {
@@ -91,7 +91,7 @@ pub struct RequestHandler {
 }
 
 struct Resource {
-    data: String,
+    data: Vec<u8>,
     size: u64,
     last_modified: SystemTime,
 }
@@ -100,7 +100,7 @@ impl RequestHandler {
     pub fn process_request(&mut self, request: &Request) -> Response {
         // prepare the headers and status codes
         let mut headers = self.assemble_initial_headers(request);
-        let mut message = String::from("");
+        let mut message: Vec<u8> = Vec::new();
         match request.method {
             Method::Get | Method::Head => {
                 if let Ok((code, res)) = self.get_resource(&request.resource) {
@@ -138,7 +138,7 @@ impl RequestHandler {
                 // opening/reading the resource twice)
                 match self.get_resource(&request.resource) {
                     Ok((code, resource)) => {
-                        message.push_str(resource.data.as_str());
+                        message = resource.data;
                         self.response_status = code;
                     }
                     Err(code) => {
@@ -148,7 +148,7 @@ impl RequestHandler {
             }
 
             Method::Trace => {
-                message.push_str(request.raw_request.as_str());
+                message = request.raw_request.as_bytes().to_vec();
             }
         }
 
@@ -216,10 +216,10 @@ impl RequestHandler {
                 let size = metadata.len();
                 let last_modified = metadata.modified().unwrap();
                 // TODO: implement content_type detection properly
-                let mut data = String::new();
+                let mut data = Vec::new();
                 // TODO: should check for errors here (e.g. when transmitting
                 // non-text data)
-                file.read_to_string(&mut data).unwrap();
+                file.read(&mut data).unwrap();
                 Ok((
                     StatusCode::Ok,
                     Resource {
@@ -246,7 +246,7 @@ impl RequestHandler {
         Response {
             status: StatusCode::BadRequest,
             headers,
-            message: String::from(""),
+            message: vec![],
         }
     }
 }
