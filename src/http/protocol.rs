@@ -124,7 +124,7 @@ impl RequestHandler {
                 headers.insert("Content-Type".to_string(), "message/html".to_string());
                 self.response_status = StatusCode::Ok;
             }
-            
+
             Method::NotImplemented => {
                 self.response_status = StatusCode::NotImplemented;
             }
@@ -217,9 +217,8 @@ impl RequestHandler {
                 let last_modified = metadata.modified().unwrap();
                 // TODO: implement content_type detection properly
                 let mut data = Vec::new();
-                // TODO: should check for errors here (e.g. when transmitting
-                // non-text data)
-                file.read(&mut data).unwrap();
+                let count = file.read_to_end(&mut data).unwrap();
+                println!("read {} bytes from {:?}", count, file);
                 Ok((
                     StatusCode::Ok,
                     Resource {
