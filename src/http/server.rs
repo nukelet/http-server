@@ -1,11 +1,47 @@
 use crate::http::parser;
 use crate::http::protocol::{RequestHandler, StatusCode};
+use sha2::{Digest, Sha256};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str;
+
+pub struct AuthManager {
+    root_path: PathBuf,
+    salt: String,
+}
+
+impl AuthManager {
+    pub fn new(root_path: &str) -> AuthManager {
+        AuthManager {
+            root_path: PathBuf::from(root_path),
+            salt: "EA".to_string(),
+        }
+    }
+
+    pub fn has_permission(&self, user: &str, pwd: &str, resource_path: &Path) {
+        let mut hasher = Sha256::new();
+        let salted = format!("{}{}", pwd, self.salt);
+        hasher.update(salted);
+        let hash = hasher.finalize();
+
+        let mut path = PathBuf::from(&self.root_path).join(resource_path);
+        if path.is_file() {
+            path.pop();
+        }
+
+        while path != self.root_path {
+            println!("AuthManager: currently on {:?}", path);
+            if fs::read_dir(path).contains(&".htaccess".to_string()) {
+                break;
+            }
+            path.pop();
+        }
+    }
+}
 
 pub struct SessionManager {
     request_handler: RequestHandler,
+    auth_manager: AuthManager,
 }
 
 #[allow(dead_code)]
@@ -18,6 +54,8 @@ impl SessionManager {
                 root_dir: root_path.to_string(),
                 response_status: StatusCode::Ok,
             },
+
+            auth_manager: AuthManager::new(root_path),
         }
     }
 
@@ -58,6 +96,4 @@ impl SessionManager {
     }
 }
 
-pub struct Server {
-
-}
+pub struct Server {}

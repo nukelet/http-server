@@ -1,6 +1,6 @@
 mod http;
 use http::parser::*;
-use http::server::SessionManager;
+use http::server::{AuthManager, SessionManager};
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -8,6 +8,7 @@ use std::net::{TcpListener, TcpStream};
 use std::fs::File;
 
 use std::os::unix::thread::JoinHandleExt;
+use std::path::{Path, PathBuf};
 use std::thread;
 
 #[allow(dead_code)]
@@ -20,7 +21,7 @@ fn listen(mut stream: TcpStream, server: &mut SessionManager) {
     loop {
         match reader.read(&mut buf) {
             Ok(_) => {
-                print!("GOT:\n{}", String::from_utf8_lossy(&buf));
+                // print!("GOT:\n{}", String::from_utf8_lossy(&buf));
                 data.extend_from_slice(&buf);
             }
             Err(e) => {
@@ -38,7 +39,7 @@ fn listen(mut stream: TcpStream, server: &mut SessionManager) {
         Ok((_, request)) => {
             // println!("{:?}", request),
             let result = server.process_request_str(&string_buf).unwrap();
-            println!("{}", String::from_utf8_lossy(&result));
+            // println!("{}", String::from_utf8_lossy(&result));
             stream.write_all(&result).unwrap();
         }
         Err(e) => println!("{:?}", e),
@@ -49,6 +50,8 @@ fn listen(mut stream: TcpStream, server: &mut SessionManager) {
 
 fn main() -> std::io::Result<()> {
     let root_dir = "webspace";
+    let auth = AuthManager::new(root_dir);
+    auth.has_permission("vpeixoto", "pwd", Path::new("dir1/index.html"));
 
     let listener = TcpListener::bind("127.0.0.1:8000").unwrap();
     for stream in listener.incoming() {

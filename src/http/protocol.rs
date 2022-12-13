@@ -221,7 +221,7 @@ impl RequestHandler {
                 // TODO: implement content_type detection properly
                 let mut data = Vec::new();
                 let count = file.read_to_end(&mut data).unwrap();
-                println!("read {} bytes from {:?}", count, file);
+                // println!("read {} bytes from {:?}", count, file);
 
                 let content_type = match path.extension() {
                     Some(s) => match s.to_str().unwrap() {
@@ -233,7 +233,8 @@ impl RequestHandler {
                         _ => "text/plain",
                     },
                     None => "text/plain",
-                }.to_string();
+                }
+                .to_string();
 
                 Ok((
                     StatusCode::Ok,
