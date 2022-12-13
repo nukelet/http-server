@@ -4,14 +4,14 @@ use std::fs;
 use std::path::Path;
 use std::str;
 
-pub struct Server {
+pub struct SessionManager {
     request_handler: RequestHandler,
 }
 
 #[allow(dead_code)]
-impl Server {
-    pub fn new(root_path: &str) -> Server {
-        Server {
+impl SessionManager {
+    pub fn new(root_path: &str) -> SessionManager {
+        SessionManager {
             request_handler: RequestHandler {
                 version: "HTTP/1.1".to_string(),
                 description: "HTTP Server v0.1".to_string(),
@@ -29,6 +29,7 @@ impl Server {
 
         let mut s: Vec<u8> = vec![];
 
+        s.extend_from_slice("HTTP/1.1 ".as_bytes());
         s.extend_from_slice(response.status.as_str().as_bytes());
         s.extend_from_slice("\r\n".as_bytes());
 
@@ -55,4 +56,8 @@ impl Server {
         // TODO: handle non-utf8 buffer
         self.process_request_str(std::str::from_utf8(buf).unwrap())
     }
+}
+
+pub struct Server {
+
 }

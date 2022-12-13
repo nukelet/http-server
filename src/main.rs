@@ -1,14 +1,17 @@
 mod http;
 use http::parser::*;
-use http::server::Server;
+use http::server::SessionManager;
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 
 use std::fs::File;
 
+use std::os::unix::thread::JoinHandleExt;
+use std::thread;
+
 #[allow(dead_code)]
-fn listen(mut stream: TcpStream, server: &mut Server) {
+fn listen(mut stream: TcpStream, server: &mut SessionManager) {
     println!("Starting new connection");
     stream.set_nonblocking(true).unwrap();
     let mut buf = [0; 1024];
@@ -36,20 +39,26 @@ fn listen(mut stream: TcpStream, server: &mut Server) {
             // println!("{:?}", request),
             let result = server.process_request_str(&string_buf).unwrap();
             println!("{}", String::from_utf8_lossy(&result));
-            stream.write(&result).unwrap();
+            stream.write_all(&result).unwrap();
         }
         Err(e) => println!("{:?}", e),
     }
+
+    println!("leaving!");
 }
 
 fn main() -> std::io::Result<()> {
     let root_dir = "webspace";
-    let mut server = Server::new(root_dir);
 
     let listener = TcpListener::bind("127.0.0.1:8000").unwrap();
-    let mut buf = [0; 1024];
-    for mut stream in listener.incoming() {
-        listen(stream?, &mut server);
+    for stream in listener.incoming() {
+        let join_handle = thread::spawn(|| {
+            let mut session = SessionManager::new(root_dir);
+            listen(stream.unwrap(), &mut session);
+        });
+
+        println!("spawned thread: {:#08x}", join_handle.as_pthread_t());
+        // listen(stream?, &mut server);
     }
     // let tests_dir = "tests/requests";
     // let dir_entries = std::fs::read_dir(tests_dir).unwrap();

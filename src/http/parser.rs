@@ -90,9 +90,10 @@ pub fn parse_request(input: &str) -> IResult<&str, Request> {
 
         // println!("inserting ({}, {})", name, field);
         // println!("left: {}", s);
+        // println!("parsed: \"{}: {}\"", name, field);
 
         // the last line is just a \r\n
-        if s.eq("\r\n") {
+        if s.starts_with("\r\n") {
             break;
         }
 

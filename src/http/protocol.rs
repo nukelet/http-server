@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{ErrorKind as IoErrorKind, Read};
 use std::path::Path;
@@ -94,6 +95,7 @@ struct Resource {
     data: Vec<u8>,
     size: u64,
     last_modified: SystemTime,
+    content_type: String,
 }
 
 impl RequestHandler {
@@ -111,7 +113,7 @@ impl RequestHandler {
                         date.format("%a %d %b %Y %H:%M:%S GMT").to_string(),
                     );
                     headers.insert("Content-Length".to_string(), format!("{}", res.size));
-                    headers.insert("Content-Type".to_string(), "text/html".to_string());
+                    headers.insert("Content-Type".to_string(), res.content_type);
                 }
             }
 
@@ -143,6 +145,7 @@ impl RequestHandler {
                     }
                     Err(code) => {
                         self.response_status = code;
+                        message = Vec::from(code.as_str().as_bytes());
                     }
                 }
             }
@@ -207,7 +210,7 @@ impl RequestHandler {
 
         // println!("fetching resource at {}", path.display());
 
-        match File::open(path) {
+        match File::open(path.clone()) {
             Ok(mut file) => {
                 // TODO: these can return errors depending on the platform,
                 // but will run fine on Unix... maybe handle things more
@@ -219,12 +222,26 @@ impl RequestHandler {
                 let mut data = Vec::new();
                 let count = file.read_to_end(&mut data).unwrap();
                 println!("read {} bytes from {:?}", count, file);
+
+                let content_type = match path.extension() {
+                    Some(s) => match s.to_str().unwrap() {
+                        "html" => "text/html",
+                        "txt" => "text/plain",
+                        "pdf" => "application/pdf",
+                        "gif" => "image/gif",
+                        "jpg" => "image/jpg",
+                        _ => "text/plain",
+                    },
+                    None => "text/plain",
+                }.to_string();
+
                 Ok((
                     StatusCode::Ok,
                     Resource {
                         data,
                         size,
                         last_modified,
+                        content_type,
                     },
                 ))
             }
@@ -242,6 +259,7 @@ impl RequestHandler {
         let timestamp = Utc::now().format("%a %d %b %Y %H:%M:%S GMT").to_string();
         headers.insert("Date".to_string(), timestamp);
         headers.insert("Connection-Type".to_string(), "close".to_string());
+
         Response {
             status: StatusCode::BadRequest,
             headers,
