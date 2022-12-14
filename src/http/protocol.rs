@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{ErrorKind as IoErrorKind, Read};
 use std::path::Path;
@@ -7,6 +6,8 @@ use std::time::SystemTime;
 
 use chrono::offset::Utc;
 use chrono::DateTime;
+
+use crate::http::server::AuthManager;
 
 /*
  * TODO:
@@ -89,6 +90,8 @@ pub struct RequestHandler {
     pub root_dir: String,
 
     pub response_status: StatusCode,
+
+    pub auth_manager: AuthManager,
 }
 
 struct Resource {
@@ -236,15 +239,20 @@ impl RequestHandler {
                 }
                 .to_string();
 
-                Ok((
-                    StatusCode::Ok,
-                    Resource {
-                        data,
-                        size,
-                        last_modified,
-                        content_type,
-                    },
-                ))
+                if self.auth_manager.has_permission(&path) {
+                    Ok((
+                        StatusCode::Ok,
+                        Resource {
+                            data,
+                            size,
+                            last_modified,
+                            content_type,
+                        },
+                    ))
+                } else {
+                    Err(StatusCode::Forbidden)
+                }
+
             }
             Err(e) => match e.kind() {
                 IoErrorKind::NotFound => Err(StatusCode::NotFound),

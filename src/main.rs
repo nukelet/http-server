@@ -50,13 +50,16 @@ fn listen(mut stream: TcpStream, server: &mut SessionManager) {
 
 fn main() -> std::io::Result<()> {
     let root_dir = "webspace";
-    let auth = AuthManager::new(root_dir);
-    auth.has_permission("vpeixoto", "pwd", Path::new("dir1/index.html"));
+    let user = "vpeixoto";
+    let pwd = "pwd";
+    // let pwd = "pwdwrong";
+    let auth = AuthManager::new(root_dir, user, pwd);
+    auth.has_permission(Path::new("webspace/dir1/dir11/index.html"));
 
     let listener = TcpListener::bind("127.0.0.1:8000").unwrap();
     for stream in listener.incoming() {
         let join_handle = thread::spawn(|| {
-            let mut session = SessionManager::new(root_dir);
+            let mut session = SessionManager::new(root_dir, user, pwd);
             listen(stream.unwrap(), &mut session);
         });
 
